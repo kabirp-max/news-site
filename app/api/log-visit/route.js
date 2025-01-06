@@ -1,34 +1,32 @@
 import { supabase } from '../../supabase';
 
-export async function POST(request) {
-  try {
-    // Parse the request body to get the articleId
-    const { articleId } = await request.json();
+export default async function handler(req, res) {
+  if (req.method === 'POST') {
+    const { articleId } = req.body;
 
-    // Retrieve the client's IP address
-    const ipAddress =
-      request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-
-    // Insert the visit into the ArticleVisits table
-    const { error } = await supabase
-      .from('ArticleVisits')
-      .insert([{ article_id: articleId, ip_address: ipAddress }]);
-
-    // Handle any Supabase error
-    if (error) {
-      console.error('Supabase error:', error);
-      return new Response(JSON.stringify({ success: false, error: error.message }), {
-        status: 500,
-      });
+    if (!articleId) {
+      return res.status(400).json({ error: 'Article ID is required' });
     }
 
-    // Return success response
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
-  } catch (error) {
-    // Handle any unexpected error
-    console.error('API error:', error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 500,
-    });
+    try {
+      const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+      const { error } = await supabase
+        .from('ArticleVisits')
+        .insert({ article_id: articleId, ip_address: ipAddress });
+
+      if (error) {
+        console.error('Error logging visit:', error);
+        return res.status(500).json({ error: 'Failed to log visit' });
+      }
+
+      return res.status(200).json({ message: 'Visit logged successfully' });
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  } else {
+    res.setHeader('Allow', ['POST']);
+    res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 }
